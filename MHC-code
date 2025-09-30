@@ -1,0 +1,97 @@
+import sage.matroids.advanced
+
+#This is a rank-5 minimally hyperplane connected matroid that was found. It is the smallest rank-5 such matroid.
+repn = Matrix(GF(2), [[0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0],
+                      [0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0],
+                      [0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1],
+                      [0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1],
+                      [1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1]])
+#This is a rank-6 minimally hyperplane connected matroid that was found. It is the smallest rank-6 such matroid.
+rank6repn = Matrix(GF(2), [[0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0],
+                           [0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0],
+                           [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1],
+                           [0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1],
+                           [1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0],
+                           [0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1]])
+
+repnMat = Matroid(repn)
+rank6Mat = Matroid(rank6repn)
+
+#We can either start with a projective geometry or an affine geometry. From testing, it is often better to start with an affine geometry. 
+PG = matroids.PG(3,2)
+AG = matroids.AG(6,2)
+
+matroidList = [] #What we will enumerate through
+isoMatroids = [] #List of non-isomorphic matroids
+goodList = [] #The list of minimally hyperplane connected matroids. 
+
+# A matroid M is hyperplane connected if every hyperplane of M is connected. An example of such a matroid is the Fano plane (F7).
+# Deleting a cocircuit of a matroid gives a hyperplane of the matroid
+#This method will go through all hyperplanes of the matroids by checking the compliment of every cocircuit. 
+#Then it will return False if it detects a disconnected hyperplane (i.e. the matroid is NOT hyperplane connected. 
+def is_hyperplaneConnected(mat):
+    #print(mat)
+    for x in mat.cocircuits():
+        test = mat.delete(x)
+        #print(test)
+        if test.is_connected() == False:
+            return False
+    return True
+    
+#A property we care about is being minimally hyperplane connected, that is, a matroid M is hyperplane connected and deleting any point of M
+#will make M not hyperplane connected. Therefore we must go through every element of the matroid, delete it from M, then test to see if M-e
+#is hyperplane connected. If we can find such an element where M-e is hyperplane connected, then M is not minimally hyperplane connected.
+def is_minHPConnected(mat):
+    for e in mat.groundset():
+        delMat = mat.delete(e)
+        if is_hyperplaneConnected(delMat) == True:
+            return False
+    return True
+    
+#Since we are starting with either a projective geometry or an affine geometry and deleting points, we want to reduce the number 
+#of computations. Therefore we make a list of all the matroids we have seen and before we add a new matroid to matroidList, we check to see
+#if this matroid has been seen before. If it has, we do not add it to matroidList. 
+def checkIsomorphisms(mat):
+    testMatroid = Matroid(mat)
+    testIso = []
+    for M in isoMatroids:
+        checkMatroid = Matroid(M)
+        testIso.append(testMatroid.is_isomorphic(checkMatroid))
+        
+    if not any(testIso):
+        isoMatroids.append(mat)
+        return False
+
+#This method will be how we delete elements and add them to goodList (the matroids that are minimally hyperplane connected). 
+def checker(mat):
+    matroidList.append(mat) 
+    isoMatroids.append(mat) #We need to put a matroid in isoMatroids (the matroids that we will check for isomorphisms).
+    while matroidList != []:
+        mat = matroidList[0] #
+        matroidList.pop(0) #Remove the first matroid from matroidList.
+        print(mat) 
+        if is_minHPConnected(mat) == True and is_hyperplaneConnected(mat) == True: #If mat is hyperplane connected AND minimally hyperplane connected, we will add this to goodList
+            goodList.append(mat)
+            print('New Matroid!')
+            print(mat.representation()) 
+            print('')
+        #We check every possible single element deletion of mat.
+        for e in mat.groundset():
+            delMat = mat.delete(e)
+            #print(matroidList)
+            if checkIsomorphisms(delMat) == False: #If we have not seen this before, we will append it to isoMatroids.
+                isoMatroids.append(delMat)
+                #Lastly, we want to make sure we didn't delete enough elements to drop the rank. If we did not drop the rank after deleting an element, we add it to matroidList
+                if delMat.rank() == mat.rank(): matroidList.append(delMat) 
+            #mat = tempMat
+print('')
+
+checker(AG)
+
+#Print the information of the matroids found. More information can be added if needed. 
+for M in goodList:
+    print(M)
+    print('')
+    print(M.representation())
+
+

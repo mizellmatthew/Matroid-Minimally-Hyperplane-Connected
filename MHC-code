@@ -1,29 +1,6 @@
 import sage.matroids.advanced
 
-#This is a rank-5 minimally hyperplane connected matroid that was found. It is the smallest rank-5 such matroid.
-repn = Matrix(GF(2), [[0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0],
-                      [0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0],
-                      [0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1],
-                      [0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1],
-                      [1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1]])
-#This is a rank-6 minimally hyperplane connected matroid that was found. It is the smallest rank-6 such matroid.
-rank6repn = Matrix(GF(2), [[0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0],
-                           [0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0],
-                           [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1],
-                           [0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1],
-                           [1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0],
-                           [0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1]])
-
-repnMat = Matroid(repn)
-rank6Mat = Matroid(rank6repn)
-
-#We can either start with a projective geometry or an affine geometry. From testing, it is often better to start with an affine geometry. 
-PG = matroids.PG(3,2)
-AG = matroids.AG(6,2)
-
-matroidList = [] #What we will enumerate through
-isoMatroids = [] #List of non-isomorphic matroids
-goodList = [] #The list of minimally hyperplane connected matroids. 
+AG = matroids.AG(6,2) #Change the rank (the 6) to whatever you want.
 
 # A matroid M is hyperplane connected if every hyperplane of M is connected. An example of such a matroid is the Fano plane (F7).
 # Deleting a cocircuit of a matroid gives a hyperplane of the matroid
@@ -47,51 +24,68 @@ def is_minHPConnected(mat):
         if is_hyperplaneConnected(delMat) == True:
             return False
     return True
-    
-#Since we are starting with either a projective geometry or an affine geometry and deleting points, we want to reduce the number 
-#of computations. Therefore we make a list of all the matroids we have seen and before we add a new matroid to matroidList, we check to see
-#if this matroid has been seen before. If it has, we do not add it to matroidList. 
-def checkIsomorphisms(mat):
-    testMatroid = Matroid(mat)
-    testIso = []
-    for M in isoMatroids:
-        checkMatroid = Matroid(M)
-        testIso.append(testMatroid.is_isomorphic(checkMatroid))
+#From doing further research, we have found a more efficient way of creating hyperplane connected matroids
+#Instead of deleting one element at a time, we delete specific full affine subspaces at a time. We have to get bases for this subspaces,
+#So that is what the first part of this method is doing. At this time, I do not know of a way to grab specific flats without using a for loop,
+(I HAVE TRIED VARIOUS METHODS AND THIS ONE IS THE ONLY ONE THAT WORKS). That is causing things to slow down at higher ranks. However we get solutions for
+rank 8 and 9, which are usually computationally very difficult because of how big everything gets.
+def reduceMatroid(mat):
+    #Get a rank-(r-3) subset of AG(r-1,2)
+    for x in mat.independent_sets_iterator(rank(mat) - 3):
+        Z = x
+        break
+    #Make it a rank-(r-3) flat
+    CLZ = mat.closure(Z) 
+
+    #Get some element outside of the flat
+    for e in mat.groundset().difference(CLZ):
+        special_element = e
+        break
         
-    if not any(testIso):
-        isoMatroids.append(mat)
-        return False
+    #Get a basis for a rank r-2 flat containing Z
+    newList = [special_element]
+    for e in Z:
+        newList.append(e)
+        
+    #This is the flat containing Z
+    ZrankR2Flat = mat.closure(newList)
 
-#This method will be how we delete elements and add them to goodList (the matroids that are minimally hyperplane connected). 
-def checker(mat):
-    matroidList.append(mat) 
-    isoMatroids.append(mat) #We need to put a matroid in isoMatroids (the matroids that we will check for isomorphisms).
-    while matroidList != []:
-        mat = matroidList[0] #
-        matroidList.pop(0) #Remove the first matroid from matroidList.
-        print(mat) 
-        if is_minHPConnected(mat) == True and is_hyperplaneConnected(mat) == True: #If mat is hyperplane connected AND minimally hyperplane connected, we will add this to goodList
-            goodList.append(mat)
-            print('New Matroid!')
-            print(mat.representation()) 
-            print('')
-        #We check every possible single element deletion of mat.
-        for e in mat.groundset():
-            delMat = mat.delete(e)
-            #print(matroidList)
-            if checkIsomorphisms(delMat) == False: #If we have not seen this before, we will append it to isoMatroids.
-                isoMatroids.append(delMat)
-                #Lastly, we want to make sure we didn't delete enough elements to drop the rank. If we did not drop the rank after deleting an element, we add it to matroidList
-                if delMat.rank() == mat.rank(): matroidList.append(delMat) 
-            #mat = tempMat
-print('')
+    #Grab an element outside of this rank-(r-2) flat
+    for e in mat.groundset().difference(ZrankR2Flat):
+        newspecial = e
+        break
+    #This will be a basis for a rank-(r-2) flat Z2 whose closure will contain Z, but will be a different rank-(r-2) flat.
+    newList2 = [newspecial]
+    for e in Z:
+        newList2.append(e)
+    #This deletion will delete ZrankR2Flat and the closure of Z2. 
+    BigDeletion = mat.delete(mat.closure(newList)).delete(mat.closure(newList2).difference(mat.closure(newList)))
+    print(mat)
+    print(BigDeletion)
 
-checker(AG)
+    #Through experimentation, there is still more that can be deleted while staying hyperplane connected. We cannot delete any rank-(r-2) flats so we delete rank-(r-3) flats.
+    for F in BigDeletion.flats(rank(mat) - 3):
+        print(BigDeletion.delete(F))
+        ourFlat = F
+        break
 
-#Print the information of the matroids found. More information can be added if needed. 
-for M in goodList:
-    print(M)
-    print('')
-    print(M.representation())
+    biggerDeletion = BigDeletion.delete(ourFlat)
+    print(biggerDeletion)
+
+    #We do this process again. 
+    for F in biggerDeletion.flats(rank(mat) - 3): 
+        if biggerDeletion.delete(F).rank() == biggerDeletion.rank():
+            print(biggerDeletion.delete(F))
+            ourFlat2 = F
+            break
+    #Our current belief is that this is the best possible bound. In total we delete 
+    #2^{r-2} + (2^{r-2} - 2^{r-3}) + 2*2^{r-3} = 3*2^{r-2} - 2^{r-3} many elements from AG(r-1,2) which has a total of 2^{r-1} many elements.
+    biggestDeletion = biggerDeletion.delete(ourFlat2)
+    print(biggestDeletion)   
+    print(is_hyperplaneConnected(biggestDeletion)) #True on rank 8!
+    print(is_minHPConnected(biggestDeletion))
+    print(biggestDeletion.representation())
+
+reduceMatroid(AG)
 
 
